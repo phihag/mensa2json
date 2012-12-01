@@ -111,5 +111,9 @@ def make_table(texts):
 if __name__ == '__main__':
     main()
 
-# TODO web intf with HTML representation
+# TODO get real dates in there (instead of just "Montag")
+# TODO web intf
+# TODO .. and querying from stw
+# TODO .... and caching that
+# TODO .. with HTML representation
 # TODO replace mensaVital graphic instead of editing the text
