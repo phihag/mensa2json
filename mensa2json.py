@@ -51,11 +51,16 @@ def analyze_objects(page):
 def cell2text(cell):
     return u''.join(c.get_text() for c in cell).strip()
 
-def parse_product(product_str):
-    m = re.match(ur'^(?P<desc>.*)Stud\.:\s*(?P<priceStud>.*?\u20ac)Bed\\.:\s*(?P<priceBed>.*?\u20ac)\s*', product_str, re.DOTALL)
-    if not m:
-        return product_str
-    print(m.groups())
+def meal_repr(name, product_str):
+    res = {'name': name}
+    #\s*Bed\\.:\s*(?P<priceBed>.*?\u20ac)\s*$
+    m = re.match(ur'^(?P<desc>.*?)(Stud\.:\s*(?P<priceStud>.*?\u20ac)\s*Bed\.:\s*(?P<priceBed>.*?\u20ac)\s*)?$', product_str, re.DOTALL)
+    if m.group('priceStud'):
+        res['priceStud'] = m.group('priceStud')
+    if m.group('priceBed'):
+        res['priceBed'] = m.group('priceBed')
+    res['desc'] = m.group('desc').strip()
+    return res
 
 def main():
     with open('plan.pdf', 'rb') as f:
@@ -73,13 +78,13 @@ def main():
             meals = grid[0][1:]
             for col in grid[1:]:
                 dayName = cell2text(col[0])
-                res[dayName] = dayEntry = collections.OrderedDict()
+                res[dayName] = dayEntry = []
                 for meal,cell in zip(meals, col[1:]):
                     mealName = cell2text(meal[:1])
                     if mealName == '':
                         mealName = 'mensaVital'
-                    dayEntry[mealName] = parse_product(cell2text(cell))
-            print(res)
+                    dayEntry.append(meal_repr(mealName, cell2text(cell)))
+            print(repr(res))
             return
 
 def order_in_grid(table, dividers):
@@ -107,3 +112,4 @@ if __name__ == '__main__':
     main()
 
 # TODO web intf with HTML representation
+# TODO replace mensaVital graphic instead of editing the text
