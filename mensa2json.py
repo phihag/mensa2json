@@ -1,6 +1,8 @@
 #!/usr/bin/env python
+# coding: utf-8
 
 import collections
+import optparse
 import re
 
 from pdfminer.pdfparser import PDFParser, PDFDocument
@@ -31,7 +33,8 @@ def parsePDF(f):
 
 def accept_text(textObj):
     t = textObj.get_text()
-    _IGNORED = [u'Wochenkarte  \n', 'Mensa Universit', 'Bitte beachten Sie die separate Information zur Lebensmittelkennzeichnung']
+    _IGNORED = [u'Wochenkarte  \n', u'Mensa Universit', u'Bitte beachten Sie die separate Information zur Lebensmittelkennzeichnung',
+        u'je 100g', u'Stud.: 0,70 €', u'Bed.:  0,80 €',]
     if t.startswith(tuple(_IGNORED)):
         return False
     if re.match(r'^[0-9\s]*$', t):
@@ -48,12 +51,30 @@ def analyze_objects(page):
             q.append(c)
     return res
 
+def analyze_pages(pages):
+    objs = {}
+    yoffset = 0
+    for page in pages:
+        page_objs = analyze_objects(page)
+        pages = page_objs[pdfminer.layout.LTPage]
+        assert len(pages) == 1
+        page_size = (pages[0].y1 - pages[0].y0)
+        for objs_of_type in page_objs.values():
+            for o in objs_of_type:
+                if hasattr(o, 'y0'):
+                    o.ey0 = o.y0 + yoffset
+                    o.ey1 = o.y1 + yoffset
+        yoffset -= page_size
+
+        for t,objs_of_type in page_objs.items():
+            objs.setdefault(t, []).extend(objs_of_type)
+    return objs
+
 def cell2text(cell):
     return u''.join(c.get_text() for c in cell).strip()
 
 def meal_repr(name, product_str):
     res = {'name': name}
-    #\s*Bed\\.:\s*(?P<priceBed>.*?\u20ac)\s*$
     m = re.match(ur'^(?P<desc>.*?)(Stud\.:\s*(?P<priceStud>.*?\u20ac)\s*Bed\.:\s*(?P<priceBed>.*?\u20ac)\s*)?$', product_str, re.DOTALL)
     if m.group('priceStud'):
         res['priceStud'] = m.group('priceStud')
@@ -62,37 +83,39 @@ def meal_repr(name, product_str):
     res['desc'] = m.group('desc').strip()
     return res
 
-def main():
-    with open('plan.pdf', 'rb') as f:
-        for page in parsePDF(f):
-            objs = analyze_objects(page)
-            texts = filter(accept_text, objs[pdfminer.layout.LTTextLineHorizontal])
-            table = make_table(texts)
-            left = min(el.x0 for el in table[0])
+def mensa2json(f):
+    objs = analyze_pages(parsePDF(f))
 
-            lines = objs[pdfminer.layout.LTRect]
-            dividers = sorted((l.y0 for l in lines if abs(l.y0 - l.y1) < 1 and abs(l.x0 - left) < 5), reverse=True)
-            grid = order_in_grid(table, dividers)
+    texts = filter(accept_text, objs[pdfminer.layout.LTTextLineHorizontal])
+    table = make_table(texts)
+    left = min(el.x0 for el in table[0])
 
-            res = collections.OrderedDict()
-            meals = grid[0][1:]
-            for col in grid[1:]:
-                dayName = cell2text(col[0])
-                res[dayName] = dayEntry = []
-                for meal,cell in zip(meals, col[1:]):
-                    mealName = cell2text(meal[:1])
-                    if mealName == '':
-                        mealName = 'mensaVital'
-                    dayEntry.append(meal_repr(mealName, cell2text(cell)))
-            print(repr(res))
-            return
+    lines = objs[pdfminer.layout.LTRect]
+    dividers = sorted((l.ey0 for l in lines if abs(l.ey0 - l.ey1) < 1 and abs(l.x0 - left) < 5), reverse=True)
+    grid = order_in_grid(table, dividers)
+
+    res = []
+    meals = grid[0][1:]
+    for col in grid[1:]:
+        dayName = cell2text(col[0])
+        mealsAtDay = []
+        for meal,cell in zip(meals, col[1:]):
+            mealName = cell2text(meal[:1])
+            if mealName == '':
+                mealName = 'mensaVital'
+            mealsAtDay.append(meal_repr(mealName, cell2text(cell)))
+        res.append({
+            'dayName': dayName,
+            'meals': mealsAtDay,
+        })
+    return res
 
 def order_in_grid(table, dividers):
     grid = []
     for col in table:
         grid_col = [[] for _ in dividers]
         for el in col:
-            grid_idx = next(i for i,y in enumerate(dividers) if el.y0 > y)
+            grid_idx = next(i for i,y in enumerate(dividers) if el.ey0 > y)
             grid_col[grid_idx].append(el)
         grid.append(grid_col)
     return grid
@@ -106,7 +129,19 @@ def make_table(texts):
         except StopIteration:
             closest_x = t.x0
         columns[closest_x].append(t)
-    return [sorted(c, key=lambda t:t.y0, reverse=True) for colIdx,c in sorted(columns.items())]
+    return [sorted(c, key=lambda t:t.ey0, reverse=True) for colIdx,c in sorted(columns.items())]
+
+def main():
+    parser = optparse.OptionParser('%prog plan.pdf')
+    opts,args = parser.parse_args()
+
+    if len(args) != 1:
+        parser.error('No filename specified')
+    filename = args[0]
+
+    with open(filename, 'rb') as f:
+        res = mensa2json(f)
+    print(res)
 
 if __name__ == '__main__':
     main()
@@ -117,3 +152,4 @@ if __name__ == '__main__':
 # TODO .... and caching that
 # TODO .. with HTML representation
 # TODO replace mensaVital graphic instead of editing the text
+# TODO CLI interface
