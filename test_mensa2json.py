@@ -17,6 +17,11 @@ class IntegrationTest(unittest.TestCase):
             res = mensa2json.mensa2json(testf)
         for i,dayName in enumerate(['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag']):
             self.assertEquals(res[i]['dayName'], dayName)
+        self.assertEquals(res[0]['date'], '2012-12-10')
+        self.assertEquals(res[1]['date'], '2012-12-11')
+        self.assertEquals(res[2]['date'], '2012-12-12')
+        self.assertEquals(res[3]['date'], '2012-12-13')
+        self.assertEquals(res[4]['date'], '2012-12-14')
 
         friday = res[4]
         self.assertEquals(friday['dayName'], 'Freitag')
@@ -36,53 +41,64 @@ class IntegrationTest(unittest.TestCase):
         testFn = os.path.join(TEST_DIR, 'plan.pdf')
         with open(testFn, 'rb') as testf:
             objs = mensa2json.analyze_pages(mensa2json.parsePDF(testf))
-            texts = filter(mensa2json.accept_text, objs[pdfminer.layout.LTTextLineHorizontal])
-            beilagenauswahl = next(o for o in texts if u'Beilagenauswahl' in o.get_text())
-            pfanne = next(o for o in texts if u'Pfanne' in o.get_text())
-            wok = next(o for o in texts if u'Wok' in o.get_text())
-            greencorner = next(o for o in texts if u'Green Corner' in o.get_text())
+        texts = filter(mensa2json.accept_text, objs[pdfminer.layout.LTTextLineHorizontal])
+        beilagenauswahl = next(o for o in texts if u'Beilagenauswahl' in o.get_text())
+        pfanne = next(o for o in texts if u'Pfanne' in o.get_text())
+        wok = next(o for o in texts if u'Wok' in o.get_text())
+        greencorner = next(o for o in texts if u'Green Corner' in o.get_text())
 
-            # per-page
-            assert beilagenauswahl.ey0 > pfanne.ey0
-            assert beilagenauswahl.ey1 > pfanne.ey1
-            assert wok.ey0 > greencorner.ey0
-            assert wok.ey1 > greencorner.ey1
+        # per-page
+        assert beilagenauswahl.ey0 > pfanne.ey0
+        assert beilagenauswahl.ey1 > pfanne.ey1
+        assert wok.ey0 > greencorner.ey0
+        assert wok.ey1 > greencorner.ey1
 
-            assert beilagenauswahl.ey0 > wok.ey0
-            assert beilagenauswahl.ey0 > greencorner.ey0
-            assert pfanne.ey0 > wok.ey0
-            assert pfanne.ey0 > greencorner.ey0
+        assert beilagenauswahl.ey0 > wok.ey0
+        assert beilagenauswahl.ey0 > greencorner.ey0
+        assert pfanne.ey0 > wok.ey0
+        assert pfanne.ey0 > greencorner.ey0
 
     def test_make_table(self):
         testFn = os.path.join(TEST_DIR, 'plan.pdf')
         with open(testFn, 'rb') as testf:
             objs = mensa2json.analyze_pages(mensa2json.parsePDF(testf))
-            texts = filter(mensa2json.accept_text, objs[pdfminer.layout.LTTextLineHorizontal])
-            t = mensa2json.make_table(texts)
+        texts = filter(mensa2json.accept_text, objs[pdfminer.layout.LTTextLineHorizontal])
+        t = mensa2json.make_table(texts)
 
-            # First Column
-            assert u'Essen I' in t[0][0].get_text()
-            assert u'Hauptkomponente' in t[0][1].get_text()
-            assert u'Essen II' in t[0][2].get_text()
-            assert u'Hauptkomponente' in t[0][3].get_text()
-            assert u'Beilagenauswahl' in t[0][4].get_text()
-            assert u'Essen I und II' in t[0][5].get_text()
-            assert u'Eintöpfe' in t[0][6].get_text()
-            assert u'Pfanne' in t[0][7].get_text()
-            assert u'Aktionsstand' in t[0][8].get_text()
-            assert u'Wok' in t[0][9].get_text()
-            assert u'Gratin' in t[0][10].get_text()
+        # First Column
+        assert u'Essen I' in t[0][0].get_text()
+        assert u'Hauptkomponente' in t[0][1].get_text()
+        assert u'Essen II' in t[0][2].get_text()
+        assert u'Hauptkomponente' in t[0][3].get_text()
+        assert u'Beilagenauswahl' in t[0][4].get_text()
+        assert u'Essen I und II' in t[0][5].get_text()
+        assert u'Eintöpfe' in t[0][6].get_text()
+        assert u'Pfanne' in t[0][7].get_text()
+        assert u'Aktionsstand' in t[0][8].get_text()
+        assert u'Wok' in t[0][9].get_text()
+        assert u'Gratin' in t[0][10].get_text()
 
-            # Upper-most text (~= first row)
-            assert u'Essen I' in t[0][0].get_text()
-            assert u'Montag' in t[1][0].get_text()
-            assert u'Dienstag' in t[2][0].get_text()
-            assert u'Mittwoch' in t[3][0].get_text()
-            assert u'Donnerstag' in t[4][0].get_text()
-            assert u'Freitag ' in t[5][0].get_text()
+        # Upper-most text (~= first row)
+        assert u'Essen I' in t[0][0].get_text()
+        assert u'Montag' in t[1][0].get_text()
+        assert u'Dienstag' in t[2][0].get_text()
+        assert u'Mittwoch' in t[3][0].get_text()
+        assert u'Donnerstag' in t[4][0].get_text()
+        assert u'Freitag ' in t[5][0].get_text()
 
+    def test_krefeld(self):
+        testFn = os.path.join(TEST_DIR, 'mensa_krefeld.pdf')
+        with open(testFn, 'rb') as testf:
+            res = mensa2json.mensa2json(testf)
+        self.assertEquals(res[0]['date'], '2012-12-17')
+        self.assertEquals(res[1]['date'], '2012-12-18')
+
+        tuesday = res[1]
+        eintoepfe = next(meal for meal in tuesday['meals'] if u'Eintöpfe' in meal['name'])
+        self.assertEquals(eintoepfe['priceStud'], u'1,10 €')
+        self.assertEquals(eintoepfe['priceBed'], u'2,20 €')
+        beilagenauswahl = next(meal for meal in tuesday['meals'] if u'Beilagenauswahl' in meal['name'])
+        assert u'Gemüsebeilagen' in beilagenauswahl['desc']
 
 if __name__ == '__main__':
     unittest.main()
-
-# TODO test date

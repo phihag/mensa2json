@@ -4,11 +4,20 @@
 import collections
 import optparse
 import re
+import time
 
 from pdfminer.pdfparser import PDFParser, PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfdevice import PDFDevice
 import pdfminer.layout
+
+_DAYS = { # time.strptime("%w")
+    'Montag': '1',
+    'Dienstag': '2',
+    'Mittwoch': '3',
+    'Donnerstag': '4',
+    'Freitag': '5',
+}
 
 def parsePDF(f):
     parser = PDFParser(f)
@@ -33,7 +42,7 @@ def parsePDF(f):
 
 def accept_text(textObj):
     t = textObj.get_text()
-    _IGNORED = [u'Wochenkarte  \n', u'Mensa Universit', u'Bitte beachten Sie die separate Information zur Lebensmittelkennzeichnung',
+    _IGNORED = [u'Wochenkarte  \n', u'Mensa ', u'Bitte beachten Sie die separate Information zur Lebensmittelkennzeichnung',
         u'je 100g', u'Stud.: 0,70 €', u'Bed.:  0,80 €',]
     if t.startswith(tuple(_IGNORED)):
         return False
@@ -94,10 +103,19 @@ def mensa2json(f):
     dividers = sorted((l.ey0 for l in lines if abs(l.ey0 - l.ey1) < 1 and abs(l.x0 - left) < 5), reverse=True)
     grid = order_in_grid(table, dividers)
 
+    match_cw = re.compile(ur'Mensa.*, (?P<calendar_week>[0-9]{1,2})\. KW[:;].*?\.(?P<year>2[0-9]{3})\s*$')
+    date_data = next(
+        match_cw.match(t.get_text())
+        for t in objs[pdfminer.layout.LTTextLineHorizontal]
+        if match_cw.match(t.get_text())
+    )
+
     res = []
     meals = grid[0][1:]
     for col in grid[1:]:
         dayName = cell2text(col[0])
+        dayStr = date_data.group('year') + ' ' + date_data.group('calendar_week') + ' ' + _DAYS[dayName]
+        day = time.strptime(dayStr, '%Y %W %w')
         mealsAtDay = []
         for meal,cell in zip(meals, col[1:]):
             mealName = cell2text(meal[:1])
@@ -106,6 +124,7 @@ def mensa2json(f):
             mealsAtDay.append(meal_repr(mealName, cell2text(cell)))
         res.append({
             'dayName': dayName,
+            'date': time.strftime('%Y-%m-%d', day),
             'meals': mealsAtDay,
         })
     return res
