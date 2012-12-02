@@ -165,7 +165,6 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO get real dates in there (instead of just "Montag")
 # TODO web intf
 # TODO .. and querying from stw
 # TODO .... and caching that
